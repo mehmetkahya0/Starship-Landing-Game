@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Advanced Starship Landing Simulator</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: #000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        font-family: "Arial", sans-serif;
+        color: white;
+        overflow: hidden;
+      }
+      #gameCanvas {
+        border: 1px solid #333;
+      }
+      #hud {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        font-family: "Courier New", monospace;
+        color: #00ff00;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 10px;
+        border-radius: 5px;
+      }
+      .critical {
+        color: #ff0000;
+      }
+      .warning {
+        color: #ffff00;
+      }
+      #controls {
+        margin-top: 20px;
+        color: #fff;
+        text-align: center;
+      }
+      .button {
+        background: #333;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        margin: 5px;
+        cursor: pointer;
+        border-radius: 5px;
+      }
+      .button:hover {
+        background: #444;
+      }
+      #difficultySelect {
+        background: #333;
+        color: white;
+        padding: 5px;
+        border: none;
+        border-radius: 5px;
+        margin: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hud">
+      <div>Altitude: <span id="altitude">0</span>m</div>
+      <div>Vertical Velocity: <span id="velocity">0</span>m/s</div>
+      <div>Horizontal Velocity: <span id="horizontalVelocity">0</span>m/s</div>
+      <div>Fuel: <span id="fuel">100</span>%</div>
+      <div>Rotation: <span id="rotation">0</span>°</div>
+      <div>Wind: <span id="wind">0</span>m/s</div>
+      <div>Score: <span id="score">0</span></div>
+    </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="controls">
+      <select id="difficultySelect" class="button">
+        <option value="easy">Easy</option>
+        <option value="medium">Medium</option>
+        <option value="hard">Hard</option>
+        <option value="realistic">Realistic</option>
+      </select>
+      <br />
+      <input type="checkbox" value="wind" />
+      Wind
+      <br />
+      <button class="button" id="restartBtn">Restart</button>
+      <div>
+        Controls: Arrow keys to move, Space for main engine, A/D for attitude
+        control
+      </div>
+    </div>
+
+    <script>
+      class Game {
+        constructor() {
+          this.canvas = document.getElementById("gameCanvas");
+          this.ctx = this.canvas.getContext("2d");
+          this.width = this.canvas.width;
+          this.height = this.canvas.height;
+
+          this.difficulty = {
+            easy: { gravity: 0.1, wind: 0.02, fuel: 100, thrust: 0.25 },
+            medium: { gravity: 0.15, wind: 0.05, fuel: 85, thrust: 0.2 },
+            hard: { gravity: 0.2, wind: 0.08, fuel: 70, thrust: 0.18 },
+            realistic: { gravity: 0.25, wind: 0.1, fuel: 60, thrust: 0.15 },
+          };
+
+          this.windEnabled = true; // Add this line
+          this.initGame();
+          this.setupEventListeners();
+          this.gameLoop();
+        }
+
+        initGame() {
+          const difficulty =
+            this.difficulty[document.getElementById("difficultySelect").value];
+
+          this.starship = {
+            x: this.width / 2,
+            y: 50,
+            width: 30,
+            height: 60,
+            velocity: { x: 0, y: 0 },
+            thrust: difficulty.thrust,
+            fuel: difficulty.fuel,
+            rotation: 0,
+            rcs: { left: false, right: false },
+            engineHeat: 0,
+          };
+
+          this.environment = {
+            gravity: difficulty.gravity,
+            wind: 0,
+            windVariation: difficulty.wind,
+            atmosphere: 1,
+            temperature: 20,
+          };
+
+          // Get the initial state of the wind toggle
+          this.windEnabled = document.getElementById("windToggle").checked;
+
+          this.landingPad = {
+            x: this.width / 2 - 50,
+            y: this.height - 30,
+            width: 100,
+            height: 10,
+          };
+
+          this.particles = [];
+          this.stars = this.generateStars();
+          this.clouds = this.generateClouds();
+          this.score = 0;
+          this.gameState = "playing";
+          this.frame = 0;
+          this.keys = {};
+        }
+
+        generateStars() {
+          const stars = [];
+          for (let i = 0; i < 100; i++) {
+            stars.push({
+              x: Math.random() * this.width,
+              y: Math.random() * this.height,
+              size: Math.random() * 2,
+              brightness: Math.random(),
+            });
+          }
+          return stars;
+        }
+
+        generateClouds() {
+          const clouds = [];
+          for (let i = 0; i < 10; i++) {
+            clouds.push({
+              x: Math.random() * this.width,
+              y: Math.random() * (this.height / 2),
+              width: Math.random() * 100 + 50,
+              height: Math.random() * 30 + 20,
+              speed: Math.random() * 0.5,
+            });
+          }
+          return clouds;
+        }
+
+        setupEventListeners() {
+          window.addEventListener("keydown", (e) => {
+            if (e.code === "Space") e.preventDefault();
+            this.keys[e.code] = true;
+          });
+
+          window.addEventListener("keyup", (e) => {
+            if (e.code === "Space") e.preventDefault();
+            this.keys[e.code] = false;
+          });
+
+          document
+            .getElementById("restartBtn")
+            .addEventListener("click", () => this.initGame());
+          document
+            .getElementById("difficultySelect")
+            .addEventListener("change", () => this.initGame());
+        }
+
+        updatePhysics() {
+          if (this.gameState !== "playing") return;
+
+          // Update environment
+          this.environment.wind +=
+            (Math.random() - 0.5) * this.environment.windVariation;
+          this.environment.wind *= 0.99; // Damping
+          this.environment.atmosphere = Math.max(
+            0,
+            1 - this.starship.y / this.height
+          );
+
+          // Calculate atmospheric effects
+          const atmosphericDrag = this.environment.atmosphere * 0.01;
+
+          // Apply controls
+          if (this.keys["Space"] && this.starship.fuel > 0) {
+            const thrustVector = {
+              x:
+                Math.sin(this.starship.rotation) *
+                this.starship.thrust *
+                (this.starship.fuel > 0 ? 1 : 0),
+              y:
+                -Math.cos(this.starship.rotation) *
+                this.starship.thrust *
+                (this.starship.fuel > 0 ? 1 : 0),
+            };
+            this.starship.velocity.x += thrustVector.x;
+            this.starship.velocity.y += thrustVector.y;
+            this.starship.fuel = Math.max(this.starship.fuel - 0.3, 0);
+            this.starship.engineHeat = Math.min(
+              1,
+              this.starship.engineHeat + 0.1
+            );
+            this.addThrustParticles();
+          } else {
+            this.starship.engineHeat = Math.max(
+              0,
+              this.starship.engineHeat - 0.05
+            );
+          }
+
+          // RCS controls
+          if (this.keys["KeyA"]) {
+            this.starship.rotation -= 0.03;
+            this.starship.rcs.left = true;
+            if (this.starship.fuel > 0) this.starship.fuel -= 0.1;
+          } else {
+            this.starship.rcs.left = false;
+          }
+
+          if (this.keys["KeyD"]) {
+            this.starship.rotation += 0.03;
+            this.starship.rcs.right = true;
+            if (this.starship.fuel > 0) this.starship.fuel -= 0.1;
+          } else {
+            this.starship.rcs.right = false;
+          }
+
+          // Apply physics
+          this.starship.velocity.y += this.environment.gravity;
+          this.starship.velocity.x +=
+            this.environment.wind * this.environment.atmosphere;
+
+          // Apply atmospheric drag
+          this.starship.velocity.x *= 1 - atmosphericDrag;
+          this.starship.velocity.y *= 1 - atmosphericDrag;
+
+          // Update position
+          this.starship.x += this.starship.velocity.x;
+          this.starship.y += this.starship.velocity.y;
+
+          // Boundary checks
+          if (this.starship.x < 0) {
+            this.starship.x = 0;
+            this.starship.velocity.x *= -0.5;
+          }
+          if (this.starship.x > this.width - this.starship.width) {
+            this.starship.x = this.width - this.starship.width;
+            this.starship.velocity.x *= -0.5;
+          }
+
+          // Update particles
+          this.particles = this.particles.filter((p) => p.life > 0);
+          this.particles.forEach((p) => {
+            p.x += p.vx + this.environment.wind * this.environment.atmosphere;
+            p.y += p.vy;
+            p.life -= 1;
+            p.size *= 0.95;
+          });
+
+          // Update clouds
+          this.clouds.forEach((cloud) => {
+            cloud.x += cloud.speed + this.environment.wind * 0.5;
+            if (cloud.x > this.width) cloud.x = -cloud.width;
+            if (cloud.x < -cloud.width) cloud.x = this.width;
+          });
+
+          // Landing check
+          if (this.starship.y + this.starship.height > this.landingPad.y) {
+            const landingSpeed = Math.abs(this.starship.velocity.y);
+            const horizontalSpeed = Math.abs(this.starship.velocity.x);
+            const isOverPad =
+              this.starship.x + this.starship.width / 2 > this.landingPad.x &&
+              this.starship.x + this.starship.width / 2 <
+                this.landingPad.x + this.landingPad.width;
+
+            if (
+              landingSpeed < 2 &&
+              horizontalSpeed < 1 &&
+              isOverPad &&
+              Math.abs(this.starship.rotation) < 0.2
+            ) {
+              this.gameState = "won";
+              this.score += Math.floor(
+                this.starship.fuel * 10 +
+                  1000 / (landingSpeed + horizontalSpeed + 1)
+              );
+            } else {
+              this.gameState = "lost";
+              this.createExplosion();
+            }
+          }
+
+          // Update HUD
+          this.updateHUD();
+        }
+
+        updateHUD() {
+          const altitude = Math.floor(
+            this.height - (this.starship.y + this.starship.height)
+          );
+          const verticalSpeed = this.starship.velocity.y.toFixed(1);
+          const horizontalSpeed = this.starship.velocity.x.toFixed(1);
+          const rotation = ((this.starship.rotation * 180) / Math.PI).toFixed(
+            1
+          );
+
+          document.getElementById("altitude").textContent = altitude;
+          document.getElementById("velocity").textContent = verticalSpeed;
+          document.getElementById("horizontalVelocity").textContent =
+            horizontalSpeed;
+          document.getElementById("fuel").textContent = Math.floor(
+            this.starship.fuel
+          );
+          document.getElementById("rotation").textContent = rotation;
+          document.getElementById("wind").textContent =
+            this.environment.wind.toFixed(2);
+          document.getElementById("score").textContent = this.score;
+
+          // Color coding for critical values
+          document.getElementById("velocity").className =
+            Math.abs(verticalSpeed) > 3
+              ? "critical"
+              : Math.abs(verticalSpeed) > 2
+              ? "warning"
+              : "";
+          document.getElementById("horizontalVelocity").className =
+            Math.abs(horizontalSpeed) > 2
+              ? "critical"
+              : Math.abs(horizontalSpeed) > 1
+              ? "warning"
+              : "";
+          document.getElementById("fuel").className =
+            this.starship.fuel < 20
+              ? "critical"
+              : this.starship.fuel < 40
+              ? "warning"
+              : "";
+        }
+
+        createExplosion() {
+          for (let i = 0; i < 50; i++) {
+            this.particles.push({
+              x: this.starship.x + this.starship.width / 2,
+              y: this.starship.y + this.starship.height / 2,
+              vx: (Math.random() - 0.5) * 10,
+              vy: (Math.random() - 0.5) * 10,
+              life: 50 + Math.random() * 20,
+              size: 3 + Math.random() * 3,
+              color: `hsl(${30 + Math.random() * 20}, 100%, 50%)`,
+            });
+          }
+        }
+
+        addThrustParticles() {
+          const baseX = this.starship.x + this.starship.width / 2;
+          const baseY = this.starship.y + this.starship.height / 2;
+          const angle = this.starship.rotation;
+
+          for (let i = 0; i < 3; i++) {
+            const spread = (Math.random() - 0.5) * 0.5;
+            const speed = 2 + Math.random() * 2;
+
+            this.particles.push({
+              x: baseX + Math.sin(angle + spread) * (this.starship.height / 2),
+              y: baseY + Math.cos(angle + spread) * (this.starship.height / 2),
+              vx: Math.sin(angle + spread) * speed,
+              vy: Math.cos(angle + spread) * speed,
+              life: 20,
+              size: 2 + Math.random() * 2,
+              color: `hsl(${30 + this.starship.engineHeat * 20}, 100%, 50%)`,
+            });
+          }
+
+          // RCS particles
+          if (this.starship.rcs.left) {
+            this.particles.push({
+              x: baseX - this.starship.width / 2,
+              y: baseY,
+              vx: -Math.cos(angle) * 2,
+              vy: Math.sin(angle) * 2,
+              life: 10,
+              size: 1,
+              color: "white",
+            });
+          }
+          if (this.starship.rcs.right) {
+            this.particles.push({
+              x: baseX + this.starship.width / 2,
+              y: baseY,
+              vx: Math.cos(angle) * 2,
+              vy: -Math.sin(angle) * 2,
+              life: 10,
+              size: 1,
+              color: "white",
+            });
+          }
+        }
+
+        draw() {
+          this.ctx.clearRect(0, 0, this.width, this.height);
+
+          // Draw sky gradient
+          const gradient = this.ctx.createLinearGradient(0, 0, 0, this.height);
+          gradient.addColorStop(0, "#000033");
+          gradient.addColorStop(1, "#000066");
+          this.ctx.fillStyle = gradient;
+          this.ctx.fillRect(0, 0, this.width, this.height);
+
+          // Draw stars with twinkling effect
+          this.stars.forEach((star) => {
+            const twinkle =
+              Math.sin(this.frame * 0.05 + star.brightness * 10) * 0.5 + 0.5;
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${
+              star.brightness * twinkle
+            })`;
+            this.ctx.beginPath();
+            this.ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+            this.ctx.fill();
+          });
+
+          // Draw clouds
+          this.ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+          this.clouds.forEach((cloud) => {
+            this.ctx.beginPath();
+            this.ctx.ellipse(
+              cloud.x + cloud.width / 2,
+              cloud.y + cloud.height / 2,
+              cloud.width / 2,
+              cloud.height / 2,
+              0,
+              0,
+              Math.PI * 2
+            );
+            this.ctx.fill();
+          });
+
+          // Draw particles
+          this.particles.forEach((p) => {
+            this.ctx.fillStyle = p.color || "#ff6600";
+            this.ctx.beginPath();
+            this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            this.ctx.fill();
+          });
+
+          // Draw landing pad with lights
+          this.ctx.fillStyle = "#666";
+          this.ctx.fillRect(
+            this.landingPad.x,
+            this.landingPad.y,
+            this.landingPad.width,
+            this.landingPad.height
+          );
+
+          // Landing pad lights
+          const lightSpacing = 20;
+          const numLights = Math.floor(this.landingPad.width / lightSpacing);
+          for (let i = 0; i < numLights; i++) {
+            const flash = Math.sin(this.frame * 0.1 + i) > 0 ? 1 : 0.3;
+            this.ctx.fillStyle = `rgba(255, 0, 0, ${flash})`;
+            this.ctx.beginPath();
+            this.ctx.arc(
+              this.landingPad.x + i * lightSpacing + lightSpacing / 2,
+              this.landingPad.y,
+              2,
+              0,
+              Math.PI * 2
+            );
+            this.ctx.fill();
+          }
+
+          // Draw starship
+          this.ctx.save();
+          this.ctx.translate(
+            this.starship.x + this.starship.width / 2,
+            this.starship.y + this.starship.height / 2
+          );
+          this.ctx.rotate(this.starship.rotation);
+
+          // Starship body
+          const gradient2 = this.ctx.createLinearGradient(
+            -this.starship.width / 2,
+            0,
+            this.starship.width / 2,
+            0
+          );
+          gradient2.addColorStop(0, "#888");
+          gradient2.addColorStop(0.5, "#eee");
+          gradient2.addColorStop(1, "#888");
+          this.ctx.fillStyle = gradient2;
+
+          // Draw more detailed starship shape
+          this.ctx.beginPath();
+          this.ctx.moveTo(-this.starship.width / 2, this.starship.height / 2); // Bottom left
+          this.ctx.lineTo(this.starship.width / 2, this.starship.height / 2); // Bottom right
+          this.ctx.lineTo(this.starship.width / 4, -this.starship.height / 2); // Top right
+          this.ctx.lineTo(-this.starship.width / 4, -this.starship.height / 2); // Top left
+          this.ctx.closePath();
+          this.ctx.fill();
+
+          // Draw fins
+          this.ctx.fillStyle = "#666";
+          this.ctx.beginPath();
+          this.ctx.moveTo(-this.starship.width / 2, this.starship.height / 2);
+          this.ctx.lineTo(-this.starship.width, this.starship.height / 2);
+          this.ctx.lineTo(-this.starship.width / 2, this.starship.height / 4);
+          this.ctx.fill();
+
+          this.ctx.beginPath();
+          this.ctx.moveTo(this.starship.width / 2, this.starship.height / 2);
+          this.ctx.lineTo(this.starship.width, this.starship.height / 2);
+          this.ctx.lineTo(this.starship.width / 2, this.starship.height / 4);
+          this.ctx.fill();
+
+          // Engine glow when thrusting
+          if (this.keys["Space"] && this.starship.fuel > 0) {
+            const engineGlow = this.ctx.createRadialGradient(
+              0,
+              this.starship.height / 2,
+              0,
+              0,
+              this.starship.height / 2,
+              this.starship.height / 2
+            );
+            engineGlow.addColorStop(0, "rgba(255, 100, 0, 0.8)");
+            engineGlow.addColorStop(1, "rgba(255, 100, 0, 0)");
+            this.ctx.fillStyle = engineGlow;
+            this.ctx.fillRect(
+              -this.starship.width / 2,
+              this.starship.height / 2,
+              this.starship.width,
+              this.starship.height / 2
+            );
+          }
+
+          this.ctx.restore();
+
+          // Draw atmospheric entry effects
+          if (
+            Math.abs(this.starship.velocity.y) > 5 &&
+            this.environment.atmosphere > 0.5
+          ) {
+            const heatGlow = this.ctx.createRadialGradient(
+              this.starship.x + this.starship.width / 2,
+              this.starship.y,
+              0,
+              this.starship.x + this.starship.width / 2,
+              this.starship.y,
+              50
+            );
+            heatGlow.addColorStop(0, "rgba(255, 100, 0, 0.2)");
+            heatGlow.addColorStop(1, "rgba(255, 100, 0, 0)");
+            this.ctx.fillStyle = heatGlow;
+            this.ctx.fillRect(
+              this.starship.x - 25,
+              this.starship.y - 25,
+              this.starship.width + 50,
+              this.starship.height + 50
+            );
+          }
+
+          // Draw game state messages
+          if (this.gameState !== "playing") {
+            this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+            this.ctx.fillRect(0, 0, this.width, this.height);
+
+            this.ctx.font = "40px Arial";
+            this.ctx.textAlign = "center";
+
+            if (this.gameState === "won") {
+              this.ctx.fillStyle = "#00ff00";
+              this.ctx.fillText(
+                "Landing Successful!",
+                this.width / 2,
+                this.height / 2
+              );
+              this.ctx.font = "24px Arial";
+              this.ctx.fillText(
+                `Score: ${this.score}`,
+                this.width / 2,
+                this.height / 2 + 40
+              );
+            } else {
+              this.ctx.fillStyle = "#ff0000";
+              this.ctx.fillText(
+                "Crash Landing!",
+                this.width / 2,
+                this.height / 2
+              );
+            }
+          }
+
+          this.frame++;
+        }
+
+        gameLoop() {
+          this.updatePhysics();
+          this.draw();
+          requestAnimationFrame(() => this.gameLoop());
+        }
+      }
+
+      // Start the game
+      const game = new Game();
+    </script>
+  </body>
+</html>
