@@ -24,10 +24,9 @@ option {
   font-family: "DotGothic16", sans-serif !important;
 }
 
-
 .social {
   display: flex;
-    position: absolute;
+  position: absolute;
   justify-content: center;
   margin-bottom: 20px;
   margin-right: 20px;
@@ -36,14 +35,21 @@ option {
   bottom: 0 !important;
 }
 
-.social i{
-    color: white;
-    font-weight: 200 !important; 
+.social i {
+  color: white;
+  font-weight: 200 !important;
 }
-.social a{
-    color: white;
-    font-weight: 200 !important; 
-    margin: 0 10px;
+.social a {
+  color: white;
+  font-weight: 200 !important;
+  margin: 0 10px;
+  font-display: swap;
+  text-decoration: double;
+}
+
+.social a:hover {
+  color: #0051ff;
+  cursor: pointer;
 }
 
 #gameCanvas {
