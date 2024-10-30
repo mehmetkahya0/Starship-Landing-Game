@@ -1,3 +1,7 @@
+:root {
+  font-family: 'DotGothic16', sans-serif !important;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -8,10 +12,18 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  font-family: "Arial", sans-serif;
   color: white;
   overflow: hidden;
 }
+
+button,
+select,
+option {
+  font-family: 'DotGothic16', sans-serif !important;
+}
+
+
+
 #gameCanvas {
   border: 1px solid #333;
 }
@@ -19,7 +31,6 @@ body {
   position: absolute;
   top: 20px;
   left: 20px;
-  font-family: "Courier New", monospace;
   color: #00ff00;
   background: rgba(0, 0, 0, 0.5);
   padding: 10px;
