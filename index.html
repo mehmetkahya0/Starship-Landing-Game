@@ -82,7 +82,7 @@
         <option value="realistic">Realistic</option>
       </select>
       <br />
-      <input type="checkbox" value="wind" />
+      <input type="checkbox" value="wind" id="windToggle" />
       Wind
       <br />
       <button class="button" id="restartBtn">Restart</button>
@@ -201,15 +201,24 @@
           document
             .getElementById("difficultySelect")
             .addEventListener("change", () => this.initGame());
+          document
+            .getElementById("windToggle")
+            .addEventListener("change", (e) => {
+              this.windEnabled = e.target.checked;
+            });
         }
 
         updatePhysics() {
           if (this.gameState !== "playing") return;
 
           // Update environment
-          this.environment.wind +=
-            (Math.random() - 0.5) * this.environment.windVariation;
-          this.environment.wind *= 0.99; // Damping
+          if (this.windEnabled) {
+            this.environment.wind +=
+              (Math.random() - 0.5) * this.environment.windVariation;
+            this.environment.wind *= 0.99; // Damping
+          } else {
+            this.environment.wind = 0;
+          }
           this.environment.atmosphere = Math.max(
             0,
             1 - this.starship.y / this.height
@@ -264,8 +273,10 @@
 
           // Apply physics
           this.starship.velocity.y += this.environment.gravity;
-          this.starship.velocity.x +=
-            this.environment.wind * this.environment.atmosphere;
+          if (this.windEnabled) {
+            this.starship.velocity.x +=
+              this.environment.wind * this.environment.atmosphere;
+          }
 
           // Apply atmospheric drag
           this.starship.velocity.x *= 1 - atmosphericDrag;
@@ -295,11 +306,13 @@
           });
 
           // Update clouds
-          this.clouds.forEach((cloud) => {
-            cloud.x += cloud.speed + this.environment.wind * 0.5;
-            if (cloud.x > this.width) cloud.x = -cloud.width;
-            if (cloud.x < -cloud.width) cloud.x = this.width;
-          });
+          if (this.windEnabled) {
+            this.clouds.forEach((cloud) => {
+              cloud.x += cloud.speed + this.environment.wind * 0.5;
+              if (cloud.x > this.width) cloud.x = -cloud.width;
+              if (cloud.x < -cloud.width) cloud.x = this.width;
+            });
+          }
 
           // Landing check
           if (this.starship.y + this.starship.height > this.landingPad.y) {
