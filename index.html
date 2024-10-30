@@ -101,10 +101,10 @@
           this.height = this.canvas.height;
 
           this.difficulty = {
-            easy: { gravity: 0.1, wind: 0.02, fuel: 100, thrust: 0.25 },
+            easy: { gravity: 0.05, wind: 0.02, fuel: 100, thrust: 0.25 },
             medium: { gravity: 0.15, wind: 0.05, fuel: 85, thrust: 0.2 },
-            hard: { gravity: 0.2, wind: 0.08, fuel: 70, thrust: 0.18 },
-            realistic: { gravity: 0.25, wind: 0.1, fuel: 60, thrust: 0.15 },
+            hard: { gravity: 0.18, wind: 0.08, fuel: 70, thrust: 0.18 },
+            realistic: { gravity: 0.2, wind: 0.1, fuel: 70, thrust: 0.25 },
           };
 
           this.windEnabled = true; // Add this line
@@ -134,8 +134,8 @@
             gravity: difficulty.gravity,
             wind: 0,
             windVariation: difficulty.wind,
-            atmosphere: 1,
-            temperature: 20,
+            atmosphere: 100,
+            temperature: 40,
           };
 
           // Get the initial state of the wind toggle
